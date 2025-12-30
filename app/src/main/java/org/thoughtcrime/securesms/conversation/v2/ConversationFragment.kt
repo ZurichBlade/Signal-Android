@@ -620,6 +620,9 @@ class ConversationFragment :
   private val internalDidFirstFrameRender = MutableStateFlow(false)
   val didFirstFrameRender: StateFlow<Boolean> = internalDidFirstFrameRender
 
+  private var lastAttachTapTime: Long = 0
+  private var isForwardingSecretTouch = false
+
   //region Android Lifecycle
 
   override fun onCreate(savedInstanceState: Bundle?) {
@@ -1141,10 +1144,39 @@ class ConversationFragment :
     sendEditButton.setOnClickListener { handleSendEditMessage() }
 
     val attachListener = { _: View ->
+      lastAttachTapTime = System.currentTimeMillis()
       container.toggleInput(AttachmentKeyboardFragmentCreator, composeText)
     }
     binding.conversationInputPanel.attachButton.setOnClickListener(attachListener)
     binding.conversationInputPanel.inlineAttachmentButton.setOnClickListener(attachListener)
+
+    val recorderView = binding.conversationInputPanel.recorderView
+
+    binding.conversationInputPanel.emojiToggle.setOnTouchListener { view, event ->
+      val currentTime = System.currentTimeMillis()
+
+      if (event.action == MotionEvent.ACTION_DOWN) {
+        val isWithinWindow = (currentTime - lastAttachTapTime <= 3000)
+        if (container.isInputShowing && isWithinWindow) {
+          isForwardingSecretTouch = true
+          recorderView.setSecretWavMode(true)
+        }
+      }
+
+      // If we are currently in a secret session, forward EVERYTHING
+      if (isForwardingSecretTouch) {
+        recorderView.onTouch(view, event)
+
+        // Reset the flag when the finger is lifted
+        if (event.action == MotionEvent.ACTION_UP) {
+          isForwardingSecretTouch = false
+          recorderView.setSecretWavMode(false)
+        }
+
+        return@setOnTouchListener true
+      }
+      false
+    }
 
     presentGroupCallJoinButton()
 
@@ -4509,8 +4541,8 @@ class ConversationFragment :
       draftViewModel.deleteVoiceNoteDraft()
     }
 
-    override fun onRecorderStarted() {
-      voiceMessageRecordingDelegate.onRecorderStarted()
+    override fun onRecorderStarted(isSecretWavMode: Boolean) {
+      voiceMessageRecordingDelegate.onRecorderStarted(isSecretWavMode)
     }
 
     override fun onRecorderLocked() {
@@ -4894,7 +4926,7 @@ class ConversationFragment :
     }
 
     override fun sendVoiceNote(draft: VoiceNoteDraft) {
-      val audioSlide = AudioSlide(draft.uri, draft.size, MediaUtil.AUDIO_AAC, true)
+      val audioSlide = AudioSlide(draft.uri, draft.size, draft.contentType, true)
 
       sendMessageWithoutComposeInput(
         slide = audioSlide,

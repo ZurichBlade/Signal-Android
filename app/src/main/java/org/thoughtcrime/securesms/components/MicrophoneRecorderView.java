@@ -44,6 +44,12 @@ public final class MicrophoneRecorderView extends FrameLayout implements View.On
 
   private final AudioManager audioManager;
 
+  private boolean isSecretWavMode = false;
+
+  public void setSecretWavMode(boolean active) {
+    this.isSecretWavMode = active;
+  }
+
   public MicrophoneRecorderView(Context context) {
     super(context);
     this.audioManager = ContextCompat.getSystemService(context, AudioManager.class);
@@ -66,6 +72,7 @@ public final class MicrophoneRecorderView extends FrameLayout implements View.On
   }
 
   public void cancelAction(boolean byUser) {
+    this.isSecretWavMode = false; // Reset flag
     if (state != State.NOT_RUNNING) {
       state = State.NOT_RUNNING;
       hideUi();
@@ -77,6 +84,7 @@ public final class MicrophoneRecorderView extends FrameLayout implements View.On
   }
 
   public void saveAction() {
+    this.isSecretWavMode = false; // Reset flag
     if (state != State.NOT_RUNNING) {
       state = State.NOT_RUNNING;
       hideUi();
@@ -130,7 +138,7 @@ public final class MicrophoneRecorderView extends FrameLayout implements View.On
           state = State.RUNNING_HELD;
           floatingRecordButton.display(event.getX(), event.getY());
           lockDropTarget.display();
-          if (handler != null) handler.onRecordPressed();
+          if (handler != null) handler.onRecordPressed(this.isSecretWavMode);
         }
         break;
       case MotionEvent.ACTION_CANCEL:

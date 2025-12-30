@@ -42,7 +42,7 @@ public class AudioSlide extends Slide {
     VoiceNoteDraft voiceNoteDraft = VoiceNoteDraft.fromDraft(draft);
 
     return new AudioSlide(new UriAttachment(voiceNoteDraft.getUri(),
-                                            MediaUtil.AUDIO_AAC,
+                                            voiceNoteDraft.getContentType(),
                                             isFinal ? AttachmentTable.TRANSFER_PROGRESS_DONE : AttachmentTable.TRANSFER_PROGRESS_STARTED,
                                             voiceNoteDraft.getSize(),
                                             0,

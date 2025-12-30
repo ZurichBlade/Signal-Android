@@ -10,12 +10,18 @@ import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.WorkerThread;
 
+import org.signal.core.util.StreamUtil;
 import org.signal.core.util.logging.Log;
 import org.thoughtcrime.securesms.media.DecryptableUriMediaInput;
+import org.thoughtcrime.securesms.mms.PartAuthority;
+import org.thoughtcrime.securesms.util.MediaUtil;
 import org.thoughtcrime.securesms.video.interfaces.MediaInput;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.ShortBuffer;
 
 @RequiresApi(api = 23)
 public final class AudioWaveFormGenerator {
@@ -34,6 +40,14 @@ public final class AudioWaveFormGenerator {
    */
   @WorkerThread
   public static @NonNull AudioFileInfo generateWaveForm(@NonNull Context context, @NonNull Uri uri) throws IOException {
+
+    String mimeType = PartAuthority.getAttachmentContentType(context, uri);
+
+    //using separate fun for wav audio
+    if (MediaUtil.AUDIO_WAV.equals(mimeType)) {
+      return generateWaveFormForWav(context, uri);
+    }
+
     try (MediaInput dataSource = DecryptableUriMediaInput.createForUri(context, uri)) {
       long[] wave        = new long[BAR_COUNT];
       int[]  waveSamples = new int[BAR_COUNT];
@@ -165,4 +179,67 @@ public final class AudioWaveFormGenerator {
       return new AudioFileInfo(totalDurationUs, bytes);
     }
   }
+
+  @WorkerThread
+  private static @NonNull AudioFileInfo generateWaveFormForWav(@NonNull Context context, @NonNull Uri uri) throws IOException {
+    try (InputStream inputStream = PartAuthority.getAttachmentStream(context, uri)) {
+      if (inputStream == null) throw new IOException("Stream is null");
+
+      // Use shared constant for header size
+      long skipped = inputStream.skip(WavCodec.AudioConstants.WAV_HEADER_SIZE);
+      if (skipped < WavCodec.AudioConstants.WAV_HEADER_SIZE) {
+        throw new IOException("Invalid WAV: Header truncated");
+      }
+
+      byte[] allData = StreamUtil.readFully(inputStream);
+      if (allData.length == 0) return new AudioFileInfo(0, new byte[WavCodec.AudioConstants.BAR_COUNT]);
+
+      // Convert bytes to shorts efficiently
+      ShortBuffer shortBuffer = ByteBuffer.wrap(allData)
+                                          .order(ByteOrder.LITTLE_ENDIAN)
+                                          .asShortBuffer();
+
+      int     sampleCount = shortBuffer.remaining();
+      short[] samples     = new short[sampleCount];
+      shortBuffer.get(samples);
+
+      // Calculate duration using shared SAMPLE_RATE
+      long totalDurationUs = (sampleCount * 1000000L) / WavCodec.AudioConstants.SAMPLE_RATE;
+
+      float[] barAmplitudes = new float[WavCodec.AudioConstants.BAR_COUNT];
+      float   samplesPerBar = (float) sampleCount / WavCodec.AudioConstants.BAR_COUNT;
+      float   maxAmplitude  = 0;
+
+      // Process bars
+      for (int i = 0; i < WavCodec.AudioConstants.BAR_COUNT; i++) {
+        int  start = (int) (i * samplesPerBar);
+        int  end   = (int) ((i + 1) * samplesPerBar);
+        long sum   = 0;
+        int  count = 0;
+
+        for (int j = start; j < end && j < samples.length; j++) {
+          sum += Math.abs(samples[j]);
+          count++;
+        }
+
+        if (count > 0) {
+          barAmplitudes[i] = sum / (float) count;
+          if (barAmplitudes[i] > maxAmplitude) {
+            maxAmplitude = barAmplitudes[i];
+          }
+        }
+      }
+
+      // Normalize to bytes (0-255)
+      byte[] finalBars = new byte[WavCodec.AudioConstants.BAR_COUNT];
+      for (int i = 0; i < WavCodec.AudioConstants.BAR_COUNT; i++) {
+        if (maxAmplitude > 0) {
+          finalBars[i] = (byte) ((barAmplitudes[i] / maxAmplitude) * 255);
+        }
+      }
+
+      return new AudioFileInfo(totalDurationUs, finalBars);
+    }
+  }
+
 }

@@ -50,8 +50,8 @@ class VoiceMessageRecordingDelegate(
 
   fun hasActiveSession(): Boolean = session != null
 
-  fun onRecorderStarted() {
-    beginRecording()
+  fun onRecorderStarted(isSecretWavMode: Boolean) {
+    beginRecording(isSecretWavMode)
   }
 
   fun onRecorderLocked() {
@@ -95,7 +95,7 @@ class VoiceMessageRecordingDelegate(
   }
 
   @Suppress("DEPRECATION")
-  private fun beginRecording() {
+  private fun beginRecording(isSecretWavMode: Boolean) {
     val vibrator = ServiceUtil.getVibrator(fragment.requireContext())
     vibrator.vibrate(20)
 
@@ -103,7 +103,7 @@ class VoiceMessageRecordingDelegate(
     fragment.requireActivity().requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LOCKED
 
     sessionCallback.onSessionWillBegin()
-    session = Session(audioRecorder.startRecording(), sessionCallback).apply {
+    session = Session(audioRecorder.startRecording(isSecretWavMode), sessionCallback).apply {
       addTo(disposables)
     }
   }

@@ -578,8 +578,9 @@ public class InputPanel extends ConstraintLayout
   }
 
   @Override
-  public void onRecordPressed() {
-    if (listener != null) listener.onRecorderStarted();
+  public void onRecordPressed(boolean isSecretWavMode) {
+    recordingContainer.setLayoutDirection(isSecretWavMode ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR); //mirrorLayout
+    if (listener != null) listener.onRecorderStarted(isSecretWavMode);
     recordTime.display();
     slideToCancel.display();
 
@@ -596,7 +597,7 @@ public class InputPanel extends ConstraintLayout
   @Override
   public void onRecordReleased() {
     long elapsedTime = onRecordHideEvent();
-
+    recordingContainer.setLayoutDirection(View.LAYOUT_DIRECTION_INHERIT); //reset
     if (listener != null) {
       Log.d(TAG, "Elapsed time: " + elapsedTime);
       if (elapsedTime > 1000) {
@@ -818,7 +819,7 @@ public class InputPanel extends ConstraintLayout
   }
 
   public interface Listener extends VoiceNoteDraftView.Listener {
-    void onRecorderStarted();
+    void onRecorderStarted(boolean isSecretWavMode);
     void onRecorderLocked();
     void onRecorderSaveDraft();
     void onRecorderFinished();

@@ -1,3 +1,19 @@
+# ️ Secret WAV Voice Note Feature
+
+This fork add's a Secret Recording mode that sends the audio message in .wav format.
+
+## ️ Steps
+- Open any conversation.
+- Tap the Attachment (+) button.
+- Within 3 seconds, Tap and hold the Emoji icon on the left.
+- Recording will start with the default UI.
+- Release to send the WAV file.
+
+## Demo
+<p align="left">
+  <img src="wav_demo.gif" width="300" title="Secret WAV Mode Demo">
+</p>
+
 # Signal Android
 
 Signal is a simple, powerful, and secure messenger that uses your phone's data connection (WiFi/3G/4G/5G) to communicate securely.

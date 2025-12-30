@@ -119,7 +119,7 @@ object SaveAttachmentUtil {
   @SuppressLint("SimpleDateFormat")
   private fun generateOutputFileName(contentType: String, timestamp: Long): String {
     val mimeTypeMap = MimeTypeMap.getSingleton()
-    val extension = mimeTypeMap.getExtensionFromMimeType(contentType) ?: "attach"
+    val extension = mimeTypeMap.getExtensionFromMimeType(contentType) ?: if (contentType == MediaUtil.AUDIO_WAV) "wav" else "attach"
     val dateFormatter = SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS")
     val base = "signal-${dateFormatter.format(timestamp)}"
 

@@ -39,6 +39,7 @@ public class AudioRecorder {
   private Future<Uri>      recordingUriFuture;
   private volatile Uri     recordingUri;
   private SingleSubject<VoiceNoteDraft> recordingSubject;
+  private String currentContentType = MediaUtil.AUDIO_AAC;
 
   public AudioRecorder(@NonNull Context context, @Nullable AudioRecordingHandler uiHandler) {
     this.context   = context;
@@ -64,20 +65,20 @@ public class AudioRecorder {
     audioFocusManager = AudioRecorderFocusManager.create(context, onAudioFocusChangeListener);
   }
 
-  public @NonNull Single<VoiceNoteDraft> startRecording() {
-    return startRecording(Build.VERSION.SDK_INT >= 26);
+  public @NonNull Single<VoiceNoteDraft> startRecording(boolean isSecretWavMode) {
+    return startRecording(Build.VERSION.SDK_INT >= 26, isSecretWavMode);
   }
 
-  public @NonNull Single<VoiceNoteDraft> startRecording(final boolean useMediaCodecWrapper) {
+  public @NonNull Single<VoiceNoteDraft> startRecording(final boolean useMediaCodecWrapper, final boolean isSecretWavMode) {
     Log.i(TAG, "startRecording(" + useMediaCodecWrapper + ")");
 
     final SingleSubject<VoiceNoteDraft> recordingSingle = SingleSubject.create();
-    startRecordingInternal(useMediaCodecWrapper, recordingSingle);
+    startRecordingInternal(useMediaCodecWrapper, isSecretWavMode, recordingSingle);
 
     return recordingSingle;
   }
 
-  private void startRecordingInternal(boolean useMediaRecorderWrapper, SingleSubject<VoiceNoteDraft> recordingSingle) {
+  private void startRecordingInternal(boolean useMediaRecorderWrapper, boolean isSecretWavMode, SingleSubject<VoiceNoteDraft> recordingSingle) {
     executor.execute(() -> {
       Log.i(TAG, "Running startRecording(" + useMediaRecorderWrapper + ") + " + Thread.currentThread().getId());
       try {
@@ -86,16 +87,18 @@ public class AudioRecorder {
           return;
         }
 
+        this.currentContentType = isSecretWavMode ? MediaUtil.AUDIO_WAV : MediaUtil.AUDIO_AAC;
+
         ParcelFileDescriptor fds[] = ParcelFileDescriptor.createPipe();
 
         BlobProvider.BlobBuilder blobBuilder = BlobProvider.getInstance()
                                                            .forData(new ParcelFileDescriptor.AutoCloseInputStream(fds[0]), 0)
-                                                           .withMimeType(MediaUtil.AUDIO_AAC);
+                                                           .withMimeType(currentContentType);
 
         recordingUri       = blobBuilder.buildUriForDraftAttachment();
         recordingUriFuture = blobBuilder.createForDraftAttachmentAsync(context);
 
-        recorder = useMediaRecorderWrapper ? new MediaRecorderWrapper() : new AudioCodec();
+        recorder = isSecretWavMode ? new WavCodec() : useMediaRecorderWrapper ? new MediaRecorderWrapper() : new AudioCodec();
         int focusResult = audioFocusManager.requestAudioFocus();
         if (focusResult != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
           Log.w(TAG, "Could not gain audio focus. Received result code " + focusResult);
@@ -109,7 +112,7 @@ public class AudioRecorder {
         recorder = null;
         audioFocusManager.abandonAudioFocus();
         if (useMediaRecorderWrapper) {
-          startRecordingInternal(false, recordingSingle);
+          startRecordingInternal(false, isSecretWavMode, recordingSingle);
         } else {
           recordingSingle.onError(e);
         }
@@ -133,6 +136,7 @@ public class AudioRecorder {
       recorder           = null;
       recordingUriFuture = null;
       recordingUri       = null;
+      currentContentType = MediaUtil.AUDIO_AAC;
     });
   }
 
@@ -151,7 +155,7 @@ public class AudioRecorder {
       try {
         Uri uri = recordingUriFuture.get();
         long size = MediaUtil.getMediaSize(context, uri);
-        recordingSubject.onSuccess(new VoiceNoteDraft(uri, size));
+        recordingSubject.onSuccess(new VoiceNoteDraft(uri, size,currentContentType));
       } catch (IOException | ExecutionException | InterruptedException ioe) {
         Log.w(TAG, ioe);
         recordingSubject.onError(ioe);
@@ -161,6 +165,7 @@ public class AudioRecorder {
       recorder           = null;
       recordingUriFuture = null;
       recordingUri       = null;
+      currentContentType = MediaUtil.AUDIO_AAC;
     });
   }
 
@@ -178,7 +183,7 @@ public class AudioRecorder {
 
     try {
       long size = MediaUtil.getMediaSize(context, currentUri);
-      return new VoiceNoteDraft(currentUri, size);
+      return new VoiceNoteDraft(currentUri, size, currentContentType);
     } catch (IOException e) {
       Log.w(TAG, "Error getting current recording snapshot", e);
       return null;
